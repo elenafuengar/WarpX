@@ -59,7 +59,7 @@ namespace
     static void FillLo (Sigma& sigma, Sigma& sigma_cumsum,
                         Sigma& sigma_star, Sigma& sigma_star_cumsum,
                         const int olo, const int ohi, const int glo, Real fac,
-                        const amrex::Real v_sigma)
+                        const amrex::Real v_sigma, amrex::Real dh, bool adjusted_pml)
     {
         const int slo = sigma.m_lo;
         const int sslo = sigma_star.m_lo;
@@ -69,16 +69,36 @@ namespace
         Real* p_sigma_cumsum = sigma_cumsum.data();
         Real* p_sigma_star = sigma_star.data();
         Real* p_sigma_star_cumsum = sigma_star_cumsum.data();
+
         amrex::ParallelFor(N, [=] AMREX_GPU_DEVICE (int i) noexcept
         {
             i += olo;
             Real offset = static_cast<Real>(glo-i);
-            p_sigma[i-slo] = fac*(offset*offset);
+            if (adjusted_pml) {
+                amrex::Real sig_j = fac * (offset * offset);
+                //Next is always intended in the PML direction, so for low pml blocks we subtract 0.5 from offset
+                amrex::Real sig_j_next = fac * ((offset - 0.5) * (offset - 0.5));
+                amrex::Real t_j = std::exp(-0.5 * sig_j * dh);
+                amrex::Real t_j_next = std::exp(-0.5 * sig_j_next * dh);
+                p_sigma[i-slo] = (t_j_next - 1/t_j)/dh;
+            } else {
+                //Regular PML
+                p_sigma[i - slo] = fac * (offset * offset);
+            }
             // sigma_cumsum is the analytical integral of sigma function at same points than sigma
             p_sigma_cumsum[i-slo] = (fac*(offset*offset*offset)/3._rt)/v_sigma;
             if (i <= ohi+1) {
                 offset = static_cast<Real>(glo-i) - 0.5_rt;
-                p_sigma_star[i-sslo] = fac*(offset*offset);
+                if (adjusted_pml) {
+                    amrex::Real sig_j = fac * (offset * offset);
+                    //Next is always intended in the PML direction, so for low pml blocks we subtract 0.5 from offset
+                    amrex::Real sig_j_next = fac * ((offset - 0.5) * (offset - 0.5));
+                    amrex::Real t_j = std::exp(-0.5 * sig_j * dh);
+                    amrex::Real t_j_next = std::exp(-0.5 * sig_j_next * dh);
+                    p_sigma_star[i-slo] = (t_j_next - 1/t_j)/dh;
+                } else {
+                    p_sigma_star[i-sslo] = fac*(offset*offset);
+                }
                 // sigma_star_cumsum is the analytical integral of sigma function at same points than sigma_star
                 p_sigma_star_cumsum[i-sslo] = (fac*(offset*offset*offset)/3._rt)/v_sigma;
             }
@@ -88,7 +108,7 @@ namespace
     static void FillHi (Sigma& sigma, Sigma& sigma_cumsum,
                         Sigma& sigma_star, Sigma& sigma_star_cumsum,
                         const int olo, const int ohi, const int ghi, Real fac,
-                        const amrex::Real v_sigma)
+                        const amrex::Real v_sigma, amrex::Real dh, bool adjusted_pml)
     {
         const int slo = sigma.m_lo;
         const int sslo = sigma_star.m_lo;
@@ -102,12 +122,31 @@ namespace
         {
             i += olo;
             Real offset = static_cast<Real>(i-ghi-1);
-            p_sigma[i-slo] = fac*(offset*offset);
+            if (adjusted_pml) {
+                amrex::Real sig_j = fac * (offset * offset);
+                //Next is always intended in the PML direction, so for high pml blocks we add 0.5 to offset
+                amrex::Real sig_j_next = fac * ((offset + 0.5) * (offset + 0.5));
+                amrex::Real t_j = std::exp(-0.5 * sig_j * dh);
+                amrex::Real t_j_next = std::exp(-0.5 * sig_j_next * dh);
+                p_sigma[i-slo] = (t_j_next - 1/t_j)/dh;
+            } else {
+                //Regular PML
+                p_sigma[i - slo] = fac * (offset * offset);
+            }
             p_sigma_cumsum[i-slo] = (fac*(offset*offset*offset)/3._rt)/v_sigma;
             if (i <= ohi+1) {
                 offset = static_cast<Real>(i-ghi) - 0.5_rt;
-                p_sigma_star[i-sslo] = fac*(offset*offset);
-                p_sigma_star_cumsum[i-sslo] = (fac*(offset*offset*offset)/3._rt)/v_sigma;
+                if (adjusted_pml) {
+                    amrex::Real sig_j = fac * (offset * offset);
+                    //Next is always intended in the PML direction, so for high pml blocks we add 0.5 to offset
+                    amrex::Real sig_j_next = fac * ((offset + 0.5) * (offset + 0.5));
+                    amrex::Real t_j = std::exp(-0.5 * sig_j * dh);
+                    amrex::Real t_j_next = std::exp(-0.5 * sig_j_next * dh);
+                    p_sigma_star[i-slo] = (t_j_next - 1/t_j)/dh;
+                } else {
+                    //Regular PML
+                    p_sigma_star[i - slo] = fac * (offset * offset);
+                }                p_sigma_star_cumsum[i-sslo] = (fac*(offset*offset*offset)/3._rt)/v_sigma;
             }
         });
     }
@@ -184,16 +223,19 @@ SigmaBox::SigmaBox (const Box& box, const BoxArray& grids, const Real* dx, const
     }
 
     if (regdomain.ok()) { // The union of the regular grids is a single box
-        define_single(regdomain, ncell, fac, v_sigma_sb);
+        define_single(regdomain, ncell, fac, v_sigma_sb, dx);
     } else {
-        define_multiple(box, grids, ncell, fac, v_sigma_sb);
+        define_multiple(box, grids, ncell, fac, v_sigma_sb, dx);
     }
 }
 
 void SigmaBox::define_single (const Box& regdomain, const IntVect& ncell,
                               const Array<Real,AMREX_SPACEDIM>& fac,
-                              const amrex::Real v_sigma_sb)
+                              const amrex::Real v_sigma_sb, const amrex::Real* dx)
 {
+
+    bool adjusted_pml = true;
+
     for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
         const int slo = sigma[idim].lo();
         const int shi = sigma[idim].hi()-1;
@@ -206,7 +248,7 @@ void SigmaBox::define_single (const Box& regdomain, const IntVect& ncell,
         if (ohi >= olo) {
             FillLo(sigma[idim], sigma_cumsum[idim],
                    sigma_star[idim], sigma_star_cumsum[idim],
-                   olo, ohi, dlo, fac[idim], v_sigma_sb);
+                   olo, ohi, dlo, fac[idim], v_sigma_sb, dx[idim], adjusted_pml);
         }
 
 #if (AMREX_SPACEDIM != 1)
@@ -226,7 +268,7 @@ void SigmaBox::define_single (const Box& regdomain, const IntVect& ncell,
         if (ohi >= olo) {
             FillHi(sigma[idim], sigma_cumsum[idim],
                    sigma_star[idim], sigma_star_cumsum[idim],
-                   olo, ohi, dhi, fac[idim], v_sigma_sb);
+                   olo, ohi, dhi, fac[idim], v_sigma_sb, dx[idim], adjusted_pml);
         }
     }
 
@@ -234,8 +276,11 @@ void SigmaBox::define_single (const Box& regdomain, const IntVect& ncell,
 }
 
 void SigmaBox::define_multiple (const Box& box, const BoxArray& grids, const IntVect& ncell,
-                                const Array<Real,AMREX_SPACEDIM>& fac, const amrex::Real v_sigma_sb)
+                                const Array<Real,AMREX_SPACEDIM>& fac, const amrex::Real v_sigma_sb,
+                                const amrex::Real* dx)
 {
+    bool adjusted_pml = true;
+
     const std::vector<std::pair<int,Box> >& isects = grids.intersections(box, false, ncell);
 
     for (int idim = 0; idim < AMREX_SPACEDIM; ++idim)
@@ -304,7 +349,7 @@ void SigmaBox::define_multiple (const Box& box, const BoxArray& grids, const Int
                 FillLo(sigma[idim], sigma_cumsum[idim],
                        sigma_star[idim], sigma_star_cumsum[idim],
                        looverlap.smallEnd(idim), looverlap.bigEnd(idim),
-                       grid_box.smallEnd(idim), fac[idim], v_sigma_sb);
+                       grid_box.smallEnd(idim), fac[idim], v_sigma_sb, dx[idim], adjusted_pml);
             }
 
             Box hibox = amrex::adjCellHi(grid_box, idim, ncell[idim]);
@@ -317,7 +362,7 @@ void SigmaBox::define_multiple (const Box& box, const BoxArray& grids, const Int
                 FillHi(sigma[idim], sigma_cumsum[idim],
                        sigma_star[idim],  sigma_star_cumsum[idim],
                        hioverlap.smallEnd(idim), hioverlap.bigEnd(idim),
-                       grid_box.bigEnd(idim), fac[idim], v_sigma_sb);
+                       grid_box.bigEnd(idim), fac[idim], v_sigma_sb, dx[idim], adjusted_pml);
             }
 
             if (!looverlap.ok() && !hioverlap.ok()) {
@@ -351,7 +396,7 @@ void SigmaBox::define_multiple (const Box& box, const BoxArray& grids, const Int
                 FillLo(sigma[idim], sigma_cumsum[idim],
                        sigma_star[idim],  sigma_star_cumsum[idim],
                        looverlap.smallEnd(idim), looverlap.bigEnd(idim),
-                       grid_box.smallEnd(idim), fac[idim], v_sigma_sb);
+                       grid_box.smallEnd(idim), fac[idim], v_sigma_sb, dx[idim], adjusted_pml);
             }
 
             Box hibox = amrex::adjCellHi(grid_box, idim, ncell[idim]);
@@ -360,7 +405,7 @@ void SigmaBox::define_multiple (const Box& box, const BoxArray& grids, const Int
                 FillHi(sigma[idim], sigma_cumsum[idim],
                        sigma_star[idim], sigma_star_cumsum[idim],
                        hioverlap.smallEnd(idim), hioverlap.bigEnd(idim),
-                       grid_box.bigEnd(idim), fac[idim], v_sigma_sb);
+                       grid_box.bigEnd(idim), fac[idim], v_sigma_sb, dx[idim], adjusted_pml);
             }
 
             if (!looverlap.ok() && !hioverlap.ok()) {
@@ -398,7 +443,7 @@ void SigmaBox::define_multiple (const Box& box, const BoxArray& grids, const Int
                 FillLo(sigma[idim], sigma_cumsum[idim],
                        sigma_star[idim], sigma_star_cumsum[idim],
                        looverlap.smallEnd(idim), looverlap.bigEnd(idim),
-                       grid_box.smallEnd(idim), fac[idim], v_sigma_sb);
+                       grid_box.smallEnd(idim), fac[idim], v_sigma_sb, dx[idim], adjusted_pml);
             }
 
             const Box& hibox = amrex::adjCellHi(grid_box, idim, ncell[idim]);
@@ -407,7 +452,7 @@ void SigmaBox::define_multiple (const Box& box, const BoxArray& grids, const Int
                 FillHi(sigma[idim], sigma_cumsum[idim],
                        sigma_star[idim], sigma_star_cumsum[idim],
                        hioverlap.smallEnd(idim), hioverlap.bigEnd(idim),
-                       grid_box.bigEnd(idim), fac[idim], v_sigma_sb);
+                       grid_box.bigEnd(idim), fac[idim], v_sigma_sb, dx[idim], adjusted_pml);
             }
 
             if (!looverlap.ok() && !hioverlap.ok()) {
@@ -475,6 +520,7 @@ SigmaBox::ComputePMLFactorsE (const Real* a_dx, Real dt)
         N[idim] = static_cast<int>(sigma[idim].size());
         dx[idim] = a_dx[idim];
     }
+
     amrex::ParallelFor(
 #if (AMREX_SPACEDIM >= 2)
         amrex::max(AMREX_D_DECL(N[0],N[1],N[2])),

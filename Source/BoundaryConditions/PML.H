@@ -47,11 +47,11 @@ struct SigmaBox
 
     void define_single (const amrex::Box& regdomain, const amrex::IntVect& ncell,
                         const amrex::Array<amrex::Real,AMREX_SPACEDIM>& fac,
-                        const amrex::Real v_sigma);
+                        const amrex::Real v_sigma, const amrex::Real* dx);
     void define_multiple (const amrex::Box& box, const amrex::BoxArray& grids,
                           const amrex::IntVect& ncell,
                           const amrex::Array<amrex::Real,AMREX_SPACEDIM>& fac,
-                          const amrex::Real v_sigma);
+                          const amrex::Real v_sigma, const amrex::Real* dx);
 
     void ComputePMLFactorsB (const amrex::Real* dx, amrex::Real dt);
     void ComputePMLFactorsE (const amrex::Real* dx, amrex::Real dt);
