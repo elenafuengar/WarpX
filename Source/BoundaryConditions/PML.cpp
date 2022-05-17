@@ -366,6 +366,7 @@ void SigmaBox::define_multiple (const Box& box, const BoxArray& grids, const Int
             lobox.grow(kdim,ncell[kdim]);
 #endif
             Box looverlap = lobox & box;
+
             if (looverlap.ok()) {
                 FillLo(sigma[idim], sigma_cumsum[idim],
                        sigma_star[idim], sigma_star_cumsum[idim],
@@ -386,9 +387,10 @@ void SigmaBox::define_multiple (const Box& box, const BoxArray& grids, const Int
                        grid_box.bigEnd(idim), fac[idim], v_sigma_sb, dx[idim], adjusted_pml);
             }
 
-            if (!looverlap.ok() && !hioverlap.ok()) {
-                amrex::Abort("SigmaBox::SigmaBox(): corners, how did this happen?\n");
-            }
+            WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
+                looverlap.ok() || hioverlap.ok(),
+                "SigmaBox::SigmaBox(): corners, how did this happen?"
+            );
         }
 #endif
 
@@ -397,14 +399,15 @@ void SigmaBox::define_multiple (const Box& box, const BoxArray& grids, const Int
         {
             const Box& grid_box = grids[gid];
             const Box& overlap = amrex::grow(amrex::grow(grid_box,jdim,ncell[jdim]),kdim,ncell[kdim]) & box;
-            if (overlap.ok()) {
-                FillZero(sigma[idim], sigma_cumsum[idim],
-                         sigma_star[idim], sigma_star_cumsum[idim],
-                         overlap.smallEnd(idim), overlap.bigEnd(idim));
-            }
-            else {
-                amrex::Abort("SigmaBox::SigmaBox(): side_side_edges, how did this happen?\n");
-            }
+
+            WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
+                overlap.ok(),
+                "SigmaBox::SigmaBox(): side_side_edges, how did this happen?"
+            );
+
+            FillZero(sigma[idim], sigma_cumsum[idim],
+                sigma_star[idim], sigma_star_cumsum[idim],
+                overlap.smallEnd(idim), overlap.bigEnd(idim));
         }
 
         for (auto gid : direct_side_edges)
@@ -429,9 +432,10 @@ void SigmaBox::define_multiple (const Box& box, const BoxArray& grids, const Int
                        grid_box.bigEnd(idim), fac[idim], v_sigma_sb, dx[idim], adjusted_pml);
             }
 
-            if (!looverlap.ok() && !hioverlap.ok()) {
-                amrex::Abort("SigmaBox::SigmaBox(): direct_side_edges, how did this happen?\n");
-            }
+            WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
+                looverlap.ok() || hioverlap.ok(),
+                "SigmaBox::SigmaBox(): direct_side_edges, how did this happen?"
+            );
         }
 #endif
 
@@ -444,13 +448,15 @@ void SigmaBox::define_multiple (const Box& box, const BoxArray& grids, const Int
 #else
             const Box& overlap = amrex::grow(amrex::grow(grid_box,jdim,ncell[jdim]),kdim,ncell[kdim]) & box;
 #endif
-            if (overlap.ok()) {
-                FillZero(sigma[idim], sigma_cumsum[idim],
-                         sigma_star[idim], sigma_star_cumsum[idim],
-                         overlap.smallEnd(idim), overlap.bigEnd(idim));
-            } else {
-                amrex::Abort("SigmaBox::SigmaBox(): side_faces, how did this happen?\n");
-            }
+
+            WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
+                overlap.ok(),
+                "SigmaBox::SigmaBox(): side_faces, how did this happen?"
+            );
+
+            FillZero(sigma[idim], sigma_cumsum[idim],
+                sigma_star[idim], sigma_star_cumsum[idim],
+                overlap.smallEnd(idim), overlap.bigEnd(idim));
         }
 #endif
 
@@ -476,14 +482,17 @@ void SigmaBox::define_multiple (const Box& box, const BoxArray& grids, const Int
                        grid_box.bigEnd(idim), fac[idim], v_sigma_sb, dx[idim], adjusted_pml);
             }
 
-            if (!looverlap.ok() && !hioverlap.ok()) {
-                amrex::Abort("SigmaBox::SigmaBox(): direct faces, how did this happen?\n");
-            }
+            WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
+                looverlap.ok() || hioverlap.ok(),
+                "SigmaBox::SigmaBox(): direct faces, how did this happen?"
+            );
+
         }
 
-        if (direct_faces.size() > 1) {
-            amrex::Abort("SigmaBox::SigmaBox(): direct_faces.size() > 1, Box gaps not wide enough?\n");
-        }
+        WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
+            direct_faces.size() <= 1,
+            "SigmaBox::SigmaBox(): direct_faces.size() > 1, Box gaps not wide enough?"
+        );
     }
 
     amrex::Gpu::streamSynchronize();
