@@ -146,7 +146,8 @@ namespace
                 } else {
                     //Regular PML
                     p_sigma_star[i - slo] = fac * (offset * offset);
-                }                p_sigma_star_cumsum[i-sslo] = (fac*(offset*offset*offset)/3._rt)/v_sigma;
+                }
+                p_sigma_star_cumsum[i-sslo] = (fac*(offset*offset*offset)/3._rt)/v_sigma;
             }
         });
     }
@@ -231,15 +232,26 @@ SigmaBox::SigmaBox (const Box& box, const BoxArray& grids, const Real* dx, const
 
 void SigmaBox::define_single (const Box& regdomain, const IntVect& ncell,
                               const Array<Real,AMREX_SPACEDIM>& fac,
-                              const amrex::Real v_sigma_sb, const amrex::Real* dx)
+                              const amrex::Real v_sigma_sb, const amrex::Real* dx_vec)
 {
 
-    bool adjusted_pml = true;
+    bool adjusted_pml = false;
+
+    amrex::ParmParse pp_pml("pml");
+    if(pp_pml.contains("adjusted_pml")){
+        pp_pml.query("adjusted_pml", adjusted_pml);
+        std::cout<<"==========="<<std::endl;
+        std::cout<<adjusted_pml<<std::endl;
+    }
 
     for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+        // Lower boundary of the PML box in number of cells
         const int slo = sigma[idim].lo();
+        // Higher boundary of the PML box in number of cells [-1]
         const int shi = sigma[idim].hi()-1;
+        // Lower boundary of the regular domain in number of cells
         const int dlo = regdomain.smallEnd(idim);
+        // Higher boundary of the regular domain in number of cells
         const int dhi = regdomain.bigEnd(idim);
 
         // Lo
@@ -248,7 +260,7 @@ void SigmaBox::define_single (const Box& regdomain, const IntVect& ncell,
         if (ohi >= olo) {
             FillLo(sigma[idim], sigma_cumsum[idim],
                    sigma_star[idim], sigma_star_cumsum[idim],
-                   olo, ohi, dlo, fac[idim], v_sigma_sb, dx[idim], adjusted_pml);
+                   olo, ohi, dlo, fac[idim], v_sigma_sb, dx_vec[idim], adjusted_pml);
         }
 
 #if (AMREX_SPACEDIM != 1)
@@ -268,7 +280,7 @@ void SigmaBox::define_single (const Box& regdomain, const IntVect& ncell,
         if (ohi >= olo) {
             FillHi(sigma[idim], sigma_cumsum[idim],
                    sigma_star[idim], sigma_star_cumsum[idim],
-                   olo, ohi, dhi, fac[idim], v_sigma_sb, dx[idim], adjusted_pml);
+                   olo, ohi, dhi, fac[idim], v_sigma_sb, dx_vec[idim], adjusted_pml);
         }
     }
 
@@ -279,7 +291,16 @@ void SigmaBox::define_multiple (const Box& box, const BoxArray& grids, const Int
                                 const Array<Real,AMREX_SPACEDIM>& fac, const amrex::Real v_sigma_sb,
                                 const amrex::Real* dx)
 {
-    bool adjusted_pml = true;
+
+    bool adjusted_pml = false;
+
+    amrex::ParmParse pp_pml("pml");
+    if(pp_pml.contains("adjusted_pml")){
+        pp_pml.query("adjusted_pml", adjusted_pml);
+        std::cout<<"==========="<<std::endl;
+        std::cout<<adjusted_pml<<std::endl;
+    }
+
 
     const std::vector<std::pair<int,Box> >& isects = grids.intersections(box, false, ncell);
 
