@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+ #!/usr/bin/env python3
 
 # Copyright 2018-2019 Andrew Myers, Jean-Luc Vay, Maxence Thevenet
 # Remi Lehe
@@ -15,10 +15,11 @@ import numpy as np
 import scipy.constants as scc
 
 import yt ; yt.funcs.mylog.setLevel(0)
-sys.path.insert(1, '../../../../WarpX/Regression/Checksum/')
+sys.path.insert(1, '../../../../warpx/Regression/Checksum/')
 import checksumAPI
 
-filename = sys.argv[1]
+#filename = sys.argv[1]
+filename = 'diags/diag1000100'
 
 ############################
 ### INITIAL LASER ENERGY ###
@@ -53,6 +54,9 @@ print("error_rel    : " + str(error_rel))
 print("tolerance_rel: " + str(tolerance_rel))
 
 assert( error_rel < tolerance_rel )
+
+if error_rel < tolerance_rel : print('\033[92m' + 'Success'+ '\033[0m')
+
 
 # Check restart data v. original data
 sys.path.insert(0, '../../../../warpx/Examples/')

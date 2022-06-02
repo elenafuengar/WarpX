@@ -17,6 +17,7 @@
 #include "Utils/WarpXAlgorithmSelection.H"
 #include "Utils/WarpXConst.H"
 #include "Utils/WarpXProfilerWrapper.H"
+#include "Utils/WarpXUtil.H"
 #include "WarpX.H"
 #include "Parallelization/WarpXCommUtil.H"
 
@@ -75,27 +76,32 @@ namespace
             i += olo;
             Real offset = static_cast<Real>(glo-i);
             if (adjusted_pml) {
-                amrex::Real sig_j = fac * (offset * offset);
+                // fac includes the speed of light c, to match the adj_pml equations, we need to divide by it
+                amrex::Real sig_j = fac * (offset * offset) / PhysConst::c;
                 //Next is always intended in the PML direction, so for low pml blocks we subtract 0.5 from offset
-                amrex::Real sig_j_next = fac * ((offset - 0.5) * (offset - 0.5));
+                amrex::Real sig_j_next = fac * ((offset - 0.5) * (offset - 0.5)) / PhysConst::c;
                 amrex::Real t_j = std::exp(-0.5 * sig_j * dh);
                 amrex::Real t_j_next = std::exp(-0.5 * sig_j_next * dh);
-                p_sigma[i-slo] = (t_j_next - 1/t_j)/dh;
+                // with this algo, p_sigma is negative. In Warp, they use the abs value. 
+                p_sigma[i-slo] = std::min(1.0e15, std::abs((t_j_next - 1/t_j) / dh * PhysConst::c));
+
             } else {
                 //Regular PML
-                p_sigma[i - slo] = fac * (offset * offset);
+                p_sigma[i-slo] = fac * (offset * offset);
             }
             // sigma_cumsum is the analytical integral of sigma function at same points than sigma
             p_sigma_cumsum[i-slo] = (fac*(offset*offset*offset)/3._rt)/v_sigma;
             if (i <= ohi+1) {
                 offset = static_cast<Real>(glo-i) - 0.5_rt;
                 if (adjusted_pml) {
-                    amrex::Real sig_j = fac * (offset * offset);
+                    // fac includes the speed of light c, to match the adj_pml equations, we need to divide by it
+                    amrex::Real sig_j = fac * (offset * offset)/ PhysConst::c;
                     //Next is always intended in the PML direction, so for low pml blocks we subtract 0.5 from offset
-                    amrex::Real sig_j_next = fac * ((offset - 0.5) * (offset - 0.5));
+                    amrex::Real sig_j_next = fac * ((offset - 0.5) * (offset - 0.5)) / PhysConst::c;
                     amrex::Real t_j = std::exp(-0.5 * sig_j * dh);
                     amrex::Real t_j_next = std::exp(-0.5 * sig_j_next * dh);
-                    p_sigma_star[i-slo] = (t_j_next - 1/t_j)/dh;
+                    // with this algo, p_sigma is negative. In Warp, they use the abs value. 
+                    p_sigma_star[i-sslo] = std::abs((t_j_next - 1/t_j) /dh * PhysConst::c);
                 } else {
                     p_sigma_star[i-sslo] = fac*(offset*offset);
                 }
@@ -112,7 +118,6 @@ namespace
     {
         const int slo = sigma.m_lo;
         const int sslo = sigma_star.m_lo;
-
         const int N = ohi+1-olo+1;
         Real* p_sigma = sigma.data();
         Real* p_sigma_cumsum = sigma_cumsum.data();
@@ -123,29 +128,35 @@ namespace
             i += olo;
             Real offset = static_cast<Real>(i-ghi-1);
             if (adjusted_pml) {
-                amrex::Real sig_j = fac * (offset * offset);
+                // fac includes the speed of light c, to match the adj_pml equations, we need to divide by it
+                amrex::Real sig_j = fac * (offset * offset) / PhysConst::c;
                 //Next is always intended in the PML direction, so for high pml blocks we add 0.5 to offset
-                amrex::Real sig_j_next = fac * ((offset + 0.5) * (offset + 0.5));
+                amrex::Real sig_j_next = fac * ((offset + 0.5) * (offset + 0.5)) / PhysConst::c;
                 amrex::Real t_j = std::exp(-0.5 * sig_j * dh);
                 amrex::Real t_j_next = std::exp(-0.5 * sig_j_next * dh);
-                p_sigma[i-slo] = (t_j_next - 1/t_j)/dh;
+                // with this algo, p_sigma is negative. In Warp, they use the abs value. 
+                p_sigma[i-slo] = std::min(1.0e15, std::abs((t_j_next - 1/t_j) / dh * PhysConst::c));
+                
             } else {
                 //Regular PML
-                p_sigma[i - slo] = fac * (offset * offset);
+                p_sigma[i-slo] = fac * (offset * offset);
+
             }
             p_sigma_cumsum[i-slo] = (fac*(offset*offset*offset)/3._rt)/v_sigma;
             if (i <= ohi+1) {
                 offset = static_cast<Real>(i-ghi) - 0.5_rt;
                 if (adjusted_pml) {
-                    amrex::Real sig_j = fac * (offset * offset);
+                    // fac includes the speed of light c, to match the adj_pml equations, we need to divide by it
+                    amrex::Real sig_j = fac * (offset * offset)/ PhysConst::c;
                     //Next is always intended in the PML direction, so for high pml blocks we add 0.5 to offset
-                    amrex::Real sig_j_next = fac * ((offset + 0.5) * (offset + 0.5));
+                    amrex::Real sig_j_next = fac * ((offset + 0.5) * (offset + 0.5)) / PhysConst::c;
                     amrex::Real t_j = std::exp(-0.5 * sig_j * dh);
                     amrex::Real t_j_next = std::exp(-0.5 * sig_j_next * dh);
-                    p_sigma_star[i-slo] = (t_j_next - 1/t_j)/dh;
+                    // with this algo, p_sigma is negative. In Warp, they use the abs value. 
+                    p_sigma_star[i-sslo] = std::abs((t_j_next - 1/t_j) /dh * PhysConst::c);
                 } else {
                     //Regular PML
-                    p_sigma_star[i - slo] = fac * (offset * offset);
+                    p_sigma_star[i-sslo] = fac * (offset * offset);
                 }
                 p_sigma_star_cumsum[i-sslo] = (fac*(offset*offset*offset)/3._rt)/v_sigma;
             }
@@ -234,14 +245,16 @@ void SigmaBox::define_single (const Box& regdomain, const IntVect& ncell,
                               const Array<Real,AMREX_SPACEDIM>& fac,
                               const amrex::Real v_sigma_sb, const amrex::Real* dx_vec)
 {
+    // build check
+    std::cout<<"build 7.0"<<std::endl;
 
+    // declare adjusted_pml
     bool adjusted_pml = false;
 
+    // added flag to the input script
     amrex::ParmParse pp_pml("pml");
     if(pp_pml.contains("adjusted_pml")){
         pp_pml.query("adjusted_pml", adjusted_pml);
-        std::cout<<"==========="<<std::endl;
-        std::cout<<adjusted_pml<<std::endl;
     }
 
     for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -273,7 +286,6 @@ void SigmaBox::define_single (const Box& regdomain, const IntVect& ncell,
                      olo, ohi);
         }
 #endif
-
         // Hi
         olo = std::max(slo, dhi+1);
         ohi = std::min(shi, dhi+ncell[idim]);
@@ -282,6 +294,7 @@ void SigmaBox::define_single (const Box& regdomain, const IntVect& ncell,
                    sigma_star[idim], sigma_star_cumsum[idim],
                    olo, ohi, dhi, fac[idim], v_sigma_sb, dx_vec[idim], adjusted_pml);
         }
+
     }
 
     amrex::Gpu::streamSynchronize();
@@ -292,13 +305,16 @@ void SigmaBox::define_multiple (const Box& box, const BoxArray& grids, const Int
                                 const amrex::Real* dx)
 {
 
+    // build check
+    std::cout<<"build 3.0 - multiple"<<std::endl;
+
+    // declare adjusted_pml
     bool adjusted_pml = false;
 
+    // added flag to the input script
     amrex::ParmParse pp_pml("pml");
     if(pp_pml.contains("adjusted_pml")){
         pp_pml.query("adjusted_pml", adjusted_pml);
-        std::cout<<"==========="<<std::endl;
-        std::cout<<adjusted_pml<<std::endl;
     }
 
 

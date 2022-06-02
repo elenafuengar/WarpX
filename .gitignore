@@ -1,3 +1,4 @@
+spack/
 Bin/
 main?d.*.ex
 Python/pywarpx/libwarpx*.so
