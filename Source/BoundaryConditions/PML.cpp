@@ -90,7 +90,7 @@ namespace
                 p_sigma[i-slo] = fac * (offset * offset);
             }
             // sigma_cumsum is the analytical integral of sigma function at same points than sigma
-            p_sigma_cumsum[i-slo] = (fac*(offset*offset*offset)/3._rt)/v_sigma;
+            p_sigma_cumsum[i-slo] = -(fac*(offset*offset*offset)/3._rt)/v_sigma;
             if (i <= ohi+1) {
                 offset = static_cast<Real>(glo-i) - 0.5_rt;
                 if (adjusted_pml) {
@@ -106,7 +106,7 @@ namespace
                     p_sigma_star[i-sslo] = fac*(offset*offset);
                 }
                 // sigma_star_cumsum is the analytical integral of sigma function at same points than sigma_star
-                p_sigma_star_cumsum[i-sslo] = (fac*(offset*offset*offset)/3._rt)/v_sigma;
+                p_sigma_star_cumsum[i-sslo] = -(fac*(offset*offset*offset)/3._rt)/v_sigma;
             }
         });
     }
@@ -142,7 +142,7 @@ namespace
                 p_sigma[i-slo] = fac * (offset * offset);
 
             }
-            p_sigma_cumsum[i-slo] = (fac*(offset*offset*offset)/3._rt)/v_sigma;
+            p_sigma_cumsum[i-slo] =(fac*(offset*offset*offset)/3._rt)/v_sigma;
             if (i <= ohi+1) {
                 offset = static_cast<Real>(i-ghi) - 0.5_rt;
                 if (adjusted_pml) {
@@ -246,15 +246,15 @@ void SigmaBox::define_single (const Box& regdomain, const IntVect& ncell,
                               const amrex::Real v_sigma_sb, const amrex::Real* dx_vec)
 {
     // build check
-    std::cout<<"build 7.0"<<std::endl;
+    std::cout<<"build 8.0"<<std::endl;
 
     // declare adjusted_pml
-    bool adjusted_pml = false;
+    bool adjusted_pml = true;
 
     // added flag to the input script
-    amrex::ParmParse pp_pml("pml");
-    if(pp_pml.contains("adjusted_pml")){
-        pp_pml.query("adjusted_pml", adjusted_pml);
+    amrex::ParmParse pp_warpx("warpx");
+    if(pp_warpx.contains("adjusted_pml")){
+        pp_warpx.query("adjusted_pml", adjusted_pml);
     }
 
     for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {

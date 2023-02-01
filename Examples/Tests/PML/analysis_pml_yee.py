@@ -15,7 +15,7 @@ import numpy as np
 import scipy.constants as scc
 
 import yt ; yt.funcs.mylog.setLevel(0)
-sys.path.insert(1, '../../../../warpx/Regression/Checksum/')
+sys.path.insert(1, '../../../../WarpX/Regression/Checksum/')
 import checksumAPI
 
 #filename = sys.argv[1]
@@ -24,6 +24,17 @@ filename = 'diags/diag1000100'
 ############################
 ### INITIAL LASER ENERGY ###
 ############################
+ds = yt.load( 'diags/diag1000000')
+all_data_level_0 = ds.covering_grid(level=0,left_edge=ds.domain_left_edge, dims=ds.domain_dimensions)
+Bx = all_data_level_0['boxlib', 'Bx'].v.squeeze()
+By = all_data_level_0['boxlib', 'By'].v.squeeze()
+Bz = all_data_level_0['boxlib', 'Bz'].v.squeeze()
+Ex = all_data_level_0['boxlib', 'Ex'].v.squeeze()
+Ey = all_data_level_0['boxlib', 'Ey'].v.squeeze()
+Ez = all_data_level_0['boxlib', 'Ez'].v.squeeze()
+energyE = np.sum(scc.epsilon_0/2*(Ex**2+Ey**2+Ez**2))
+energyB = np.sum(1./scc.mu_0/2*(Bx**2+By**2+Bz**2))
+energy_start = energyE + energyB
 energy_start = 9.1301289517e-08
 
 ##########################

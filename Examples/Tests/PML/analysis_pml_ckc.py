@@ -18,7 +18,8 @@ import yt ; yt.funcs.mylog.setLevel(0)
 sys.path.insert(1, '../../../../warpx/Regression/Checksum/')
 import checksumAPI
 
-filename = sys.argv[1]
+#filename = sys.argv[1]
+filename = 'diags/diag1000100'
 
 ############################
 ### INITIAL LASER ENERGY ###
